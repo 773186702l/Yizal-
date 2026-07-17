@@ -1,0 +1,186 @@
+import { User, Customer, VisaApp, Invoice, ServiceRequest, Expense } from './types';
+
+export const T: Record<string, Record<string, string>> = {
+    ar:{
+     login_sub:'تسجيل الدخول إلى حساب الشركة', login_user:'اسم المستخدم', login_pass:'كلمة المرور', login_btn:'تسجيل الدخول',
+     login_err:'اسم المستخدم أو كلمة المرور غير صحيحة', demo_title:'حسابات تجريبية (اضغط للتعبئة)',
+     nav_dashboard:'الرئيسية', nav_customers:'العملاء', nav_newreq:'طلب جديد', nav_approvals:'بانتظار الاعتماد',
+     nav_tasks:'مهامي (تنفيذ)', nav_visa:'طلبات الفيزا', nav_invoices:'الفواتير', nav_accounting:'الحسابات المالية',
+     nav_workflow:'سير العمل', nav_users:'المستخدمون والصلاحيات', nav_services:'الخدمات', nav_docs:'المستندات',
+     nav_reports:'التقارير', nav_settings:'الإعدادات', logout:'تسجيل الخروج', soon:'قريباً',
+     role_admin:'مدير النظام', role_accountant:'محاسب', role_sales:'مبيعات', role_executor:'منفذ معاملات',
+     dash_title:'نظرة عامة', dash_sub:'أداء الشركة اليوم — حسب صلاحياتك',
+     kpi_customers:'إجمالي العملاء', kpi_visa:'طلبات نشطة', kpi_revenue:'إيرادات الشهر', kpi_pending:'بانتظار الاعتماد',
+     hero_t:'مسار الطلب من المبيعات حتى الفاتورة', hero_s:'كل طلب يمر تلقائيًا: مبيعات ← اعتماد المحاسب ← تنفيذ ← فاتورة تلقائية.',
+     chart_t:'المبيعات الشهرية (بالألف)', feed_t:'آخر الأنشطة',
+     new_customer:'+ عميل جديد', customers_t:'العملاء', customers_s:'سجل موحّد لكل عميل — لا يمكن إنشاء أي طلب دون رقم عميل صالح',
+     th_code:'رقم العميل', th_name:'الاسم', th_phone:'الهاتف', th_nat:'الجنسية', th_status:'الحالة', th_assigned:'المسؤول',
+     visa_t:'طلبات الفيزا', visa_s:'تتبع كل طلب عبر مراحله',
+     col_draft:'مسودة', col_submitted:'مُقدَّم', col_review:'قيد المراجعة', col_approved:'موافق عليه', col_rejected:'مرفوض',
+     inv_t:'الفواتير', inv_s:'تصدر تلقائيًا فور اعتماد التنفيذ — قابلة للإرسال عبر واتساب',
+     th_invno:'رقم الفاتورة', th_amount:'المبلغ', th_date:'التاريخ',
+     wf_t:'محرك سير العمل', wf_s:'مبيعات ← اعتماد المحاسب ← تنفيذ ← فاتورة تلقائية ← أرشفة',
+     s_sales:'مبيعات', s_acc:'اعتماد المحاسب', s_exec:'تنفيذ', s_inv:'فاتورة تلقائية', s_arch:'أرشفة',
+     soon_t:'قيد الإنشاء', soon_s:'هذا الموديول ضمن خارطة الطريق.', close:'إغلاق',
+     timeline:'السجل الزمني', documents:'المستندات المطلوبة', status_lbl:'الحالة',
+     drawer_customer:'ملف العميل', notif_t:'الإشعارات', view_all:'عرض الكل',
+     st_active:'نشط', st_inactive:'غير نشط', st_pending:'قيد الانتظار',
+     st_paid:'مسدد', st_unpaid:'غير مسدد', st_partial:'مسدد جزئياً',
+     total:'الإجمالي', due:'الاستحقاق', method:'طريقة الدفع', send:'إرسال عبر واتساب', print:'طباعة', download:'تنزيل PDF',
+     newreq_t:'طلب خدمة جديد', newreq_s:'لا يمكن حفظ أي طلب دون رقم عميل صحيح مسجّل مسبقًا في النظام',
+     f_custid:'رقم العميل *', f_custid_ph:'مثال: CUS-1042', f_service:'نوع الخدمة *', f_docs:'الوثائق المرفقة',
+     f_doc_add:'إضافة وثيقة', f_amount:'المبلغ *', f_currency:'العملة *', f_paytype:'نوع الدفع *',
+     f_receipt:'تاريخ الاستلام *', f_expiry:'تاريخ الانتهاء المتوقع *', f_employee:'الموظف المسؤول',
+     f_submit:'إرسال إلى المحاسب للاعتماد', f_notfound:'رقم العميل غير موجود — الرجاء اختيار عميل مسجّل',
+     f_found:'✓ تم التحقق: العميل', f_customer_req:'الرجاء إدخال رقم عميل صالح قبل الحفظ', f_required:'هذا الحقل مطلوب',
+     pay_cash:'نقدي', pay_card:'بطاقة ائتمان', pay_bank:'تحويل بنكي', pay_wallet:'محفظة إلكترونية',
+     approvals_t:'طلبات بانتظار الاعتماد', approvals_s:'راجع تفاصيل الدفعة واعتمد أو ارفض قبل تحويلها للتنفيذ',
+     accept:'✓ اعتماد وتحويل للتنفيذ', reject:'✕ رفض الطلب', reject_reason:'سبب الرفض', empty_approvals:'لا توجد طلبات بانتظار الاعتماد حاليًا',
+     tasks_t:'مهامي — التنفيذ', tasks_s:'المعاملات المعتمدة من المحاسب بانتظار التخليص',
+     complete_task:'✓ تم التخليص — إصدار الفاتورة', empty_tasks:'لا توجد مهام حالياً',
+     st_pending_acc:'بانتظار المحاسب', st_exec_pending:'قيد التنفيذ', st_completed:'مكتمل', st_rejected2:'مرفوض',
+     invoice_generated:'تم إصدار الفاتورة تلقائيًا', users_t:'المستخدمون والصلاحيات', users_s:'صلاحية إنشاء المستخدمين وتحديد أدوارهم متاحة للمدير فقط',
+     add_user:'+ إنشاء مستخدم جديد', f_fullname:'الاسم الكامل', f_username:'اسم المستخدم', f_password:'كلمة المرور', f_role:'الصلاحية / الدور',
+     create_user_btn:'إنشاء الحساب', services_t:'إدارة الخدمات', services_s:'أضف أو عدّل أنواع الخدمات المتاحة عند إنشاء طلب جديد',
+     add_service:'إضافة خدمة', service_ph:'اسم الخدمة الجديدة', perm_note_sales:'صلاحيتك: إنشاء عملاء وطلبات جديدة فقط. الاعتماد المالي والتنفيذ خارج صلاحيتك.',
+     perm_note_acc:'صلاحيتك: كل ما يخص المعاملات المالية — اعتماد الطلبات، الدخل والمصروفات، الفواتير.',
+     perm_note_exec:'صلاحيتك: تنفيذ المعاملات المعتمدة من المحاسب فقط.',
+     accounting_t:'المعاملات المالية', accounting_s:'دخل ومصروفات الشركة — صلاحية المحاسب والمدير فقط',
+     income:'دخل', expense:'مصروف', add_expense:'+ تسجيل مصروف جديد', by:'بواسطة',
+     assigned_to_you:'مسندة إليك', role_col:'الدور', actions:'إجراءات', generated_pw:'كلمة المرور المؤقتة:',
+     tags_title: 'الوسوم الملونة',
+     tag_create: 'إنشاء وسم جديد',
+     tag_name_ph: 'اسم الوسم...',
+     tag_color: 'لون الوسم',
+     tag_filter: 'تصفية حسب الوسم',
+     tag_all: 'كل الوسوم',
+     tag_add_btn: 'إضافة وسم',
+     tag_select_ph: 'اختر الوسوم',
+     tags_label: 'الوسوم:'
+    },
+    en:{
+     login_sub:'Sign in to your company account', login_user:'Username', login_pass:'Password', login_btn:'Sign In',
+     login_err:'Invalid username or password', demo_title:'Demo accounts (click to autofill)',
+     nav_dashboard:'Dashboard', nav_customers:'Customers', nav_newreq:'New Request', nav_approvals:'Pending Approvals',
+     nav_tasks:'My Tasks (Execution)', nav_visa:'Visa Applications', nav_invoices:'Invoices', nav_accounting:'Accounting',
+     nav_workflow:'Workflow', nav_users:'Users & Permissions', nav_services:'Services', nav_docs:'Documents',
+     nav_reports:'Reports', nav_settings:'Settings', logout:'Sign Out', soon:'Soon',
+     role_admin:'System Admin', role_accountant:'Accountant', role_sales:'Sales', role_executor:'Executor',
+     dash_title:'Overview', dash_sub:"Today's performance — scoped to your permissions",
+     kpi_customers:'Total Customers', kpi_visa:'Active Requests', kpi_revenue:'Revenue This Month', kpi_pending:'Pending Approval',
+     hero_t:'From sales request to invoice', hero_s:'Every request flows automatically: Sales → Accountant approval → Execution → Auto-invoice.',
+     chart_t:'Monthly Sales (thousands)', feed_t:'Recent Activity',
+     new_customer:'+ New Customer', customers_t:'Customers', customers_s:'A unified record — no request can be created without a valid customer ID',
+     th_code:'Customer ID', th_name:'Name', th_phone:'Phone', th_nat:'Nationality', th_status:'Status', th_assigned:'Assigned To',
+     visa_t:'Visa Applications', visa_s:'Track every request through its stages',
+     col_draft:'Draft', col_submitted:'Submitted', col_review:'Under Review', col_approved:'Approved', col_rejected:'Rejected',
+     inv_t:'Invoices', inv_s:'Auto-generated the moment execution is approved — sendable via WhatsApp',
+     th_invno:'Invoice #', th_amount:'Amount', th_date:'Date',
+     wf_t:'Workflow Engine', wf_s:'Sales → Accountant approval → Execution → Auto-invoice → Archive',
+     s_sales:'Sales', s_acc:'Accountant Approval', s_exec:'Execution', s_inv:'Auto-Invoice', s_arch:'Archive',
+     soon_t:'Under Construction', soon_s:'This module is on the roadmap.', close:'Close',
+     timeline:'Timeline', documents:'Required Documents', status_lbl:'Status',
+     drawer_customer:'Customer Profile', notif_t:'Notifications', view_all:'View all',
+     st_active:'Active', st_inactive:'Inactive', st_pending:'Pending',
+     st_paid:'Paid', st_unpaid:'Unpaid', st_partial:'Partially Paid',
+     total:'Total', due:'Due Date', method:'Payment Method', send:'Send via WhatsApp', print:'Print', download:'Download PDF',
+     newreq_t:'New Service Request', newreq_s:'A request cannot be saved without a valid, pre-registered customer ID',
+     f_custid:'Customer ID *', f_custid_ph:'e.g. CUS-1042', f_service:'Service Type *', f_docs:'Attached Documents',
+     f_doc_add:'Add Document', f_amount:'Amount *', f_currency:'Currency *', f_paytype:'Payment Type *',
+     f_receipt:'Receipt Date *', f_expiry:'Expected Completion Date *', f_employee:'Assigned Employee',
+     f_submit:'Submit to Accountant for Approval', f_notfound:'Customer ID not found — please select a registered customer',
+     f_found:'✓ Verified: Customer', f_customer_req:'Please enter a valid customer ID before saving', f_required:'This field is required',
+     pay_cash:'Cash', pay_card:'Credit Card', pay_bank:'Bank Transfer', pay_wallet:'E-Wallet',
+     approvals_t:'Pending Approvals', approvals_s:'Review payment details and approve or reject before forwarding to execution',
+     accept:'✓ Approve & Send to Execution', reject:'✕ Reject Request', reject_reason:'Rejection Reason', empty_approvals:'No requests pending approval',
+     tasks_t:'My Tasks — Execution', tasks_s:'Accountant-approved transactions awaiting processing',
+     complete_task:'✓ Mark Completed — Issue Invoice', empty_tasks:'No tasks currently',
+     st_pending_acc:'Awaiting Accountant', st_exec_pending:'In Execution', st_completed:'Completed', st_rejected2:'Rejected',
+     invoice_generated:'Invoice generated automatically', users_t:'Users & Permissions', users_s:'Creating users and assigning roles is available to Admin only',
+     add_user:'+ Create New User', f_fullname:'Full Name', f_username:'Username', f_password:'Password', f_role:'Role / Permission',
+     create_user_btn:'Create Account', services_t:'Manage Services', services_s:'Add or edit the service types available when creating a new request',
+     add_service:'Add Service', service_ph:'New service name', perm_note_sales:'Your access: create customers and new requests only. Financial approval and execution are outside your permissions.',
+     perm_note_acc:'Your access: everything related to financial transactions — approving requests, income & expenses, invoices.',
+     perm_note_exec:'Your access: process transactions already approved by the accountant only.',
+     accounting_t:'Financial Transactions', accounting_s:"Company income and expenses — Accountant & Admin only",
+     income:'Income', expense:'Expense', add_expense:'+ Record New Expense', by:'By',
+     assigned_to_you:'Assigned to you', role_col:'Role', actions:'Actions', generated_pw:'Temporary password:',
+      tags_title: 'Colored Tags',
+      tag_create: 'Create New Tag',
+      tag_name_ph: 'Tag name...',
+      tag_color: 'Tag Color',
+      tag_filter: 'Filter by Tag',
+      tag_all: 'All Tags',
+      tag_add_btn: 'Add Tag',
+      tag_select_ph: 'Select tags',
+      tags_label: 'Tags:'
+    }
+};
+
+export const accounts: User[] = [
+    {username:'laithhazza1@gmail.com', password:'1234', role:'admin', name:'ليث هزاع'},
+    {username:'laithhazza09@gmail.com', password:'1234', role:'admin', name:'ليث هزاع'},
+    {username:'admin', password:'1234', role:'admin', name:'محمد الأمين'},
+    {username:'accountant1', password:'1234', role:'accountant', name:'سارة يوسف'},
+    {username:'sales1', password:'1234', role:'sales', name:'خالد عمر'},
+    {username:'exec1', password:'1234', role:'executor', name:'نور خليفة'},
+   ];
+
+export const PERMS: Record<string, string[]> = {
+    admin:     ['dashboard','customers','newreq','approvals','tasks','visa','invoices','accounting','workflow','users','services','docs','reports','settings'],
+    accountant:['dashboard','customers','approvals','invoices','accounting','visa'],
+    sales:     ['dashboard','customers','newreq','visa'],
+    executor:  ['dashboard','tasks','visa'],
+   };
+
+export const initialCustomers: Customer[] = [
+    {code:'CUS-1042', name:'أحمد المصري', phone:'+20 100 123 4567', nat:'مصر', status:'active', assigned:'خالد عمر',
+      timeline:[{text:'طلب فيزا شنغن جديد',time:'منذ يومين'},{text:'تم استلام دفعة 5,000 ج.م',time:'منذ 4 أيام'}]},
+    {code:'CUS-1041', name:'ليلى حسن', phone:'+966 55 987 6543', nat:'السعودية', status:'active', assigned:'خالد عمر',
+      timeline:[{text:'تم تسليم الفيزا',time:'أمس'},{text:'فاتورة #INV-0231 مسددة',time:'منذ 3 أيام'}]},
+    {code:'CUS-1040', name:'Michael Chen', phone:'+1 415 555 0192', nat:'USA', status:'pending', assigned:'سارة يوسف',
+      timeline:[{text:'Document review requested',time:'2 days ago'}]},
+    {code:'CUS-1039', name:'فاطمة الزهراء', phone:'+212 6 12 34 56', nat:'المغرب', status:'inactive', assigned:'خالد عمر',
+      timeline:[{text:'تم أرشفة الملف',time:'منذ شهر'}]},
+    {code:'CUS-1038', name:'Omar Al-Rashid', phone:'+971 50 111 2233', nat:'UAE', status:'active', assigned:'نور خليفة',
+      timeline:[{text:'New investment inquiry',time:'1 day ago'}]},
+];
+
+export const initialServiceTypes = ['فيزا شنغن','فيزا أمريكا','فيزا بريطانيا','حجز فندق','تذكرة طيران','شحن بضائع','تحويل أموال','استثمار'];
+
+export const initialVisaApps: VisaApp[] = [
+    {id:'VA-3301', customer:'أحمد المصري', dest:'شنغن — فرنسا', stage:'submitted', docs:8, received:6},
+    {id:'VA-3298', customer:'Michael Chen', dest:'UK Business Visa', stage:'review', docs:6, received:6},
+    {id:'VA-3295', customer:'ليلى حسن', dest:'أمريكا — سياحية', stage:'approved', docs:7, received:7},
+    {id:'VA-3290', customer:'Omar Al-Rashid', dest:'Canada — Investor', stage:'draft', docs:10, received:3},
+];
+
+export const initialInvoices: Invoice[] = [
+    {no:'INV-0231', customer:'ليلى حسن', amount:'5,400', currency:'SAR', status:'paid', date:'2026-07-08', method:'pay_card'},
+];
+
+export const initialExpenses: Expense[] = [
+    {desc:'إيجار المكتب', amount:'3,000', currency:'EGP', by:'سارة يوسف', date:'2026-07-01', type:'expense'},
+    {desc:'دفعة عميل CUS-1041', amount:'5,400', currency:'SAR', by:'سارة يوسف', date:'2026-07-08', type:'income'},
+];
+
+export const navItems = [
+    {id:'dashboard', ic:'▦', key:'nav_dashboard'},
+    {id:'customers', ic:'☺', key:'nav_customers'},
+    {id:'newreq', ic:'✚', key:'nav_newreq'},
+    {id:'approvals', ic:'⏳', key:'nav_approvals'},
+    {id:'tasks', ic:'☑', key:'nav_tasks'},
+    {id:'visa', ic:'✈', key:'nav_visa'},
+    {id:'invoices', ic:'▤', key:'nav_invoices'},
+    {id:'accounting', ic:'฿', key:'nav_accounting'},
+    {id:'workflow', ic:'⇄', key:'nav_workflow'},
+    {id:'users', ic:'♛', key:'nav_users'},
+    {id:'services', ic:'☰', key:'nav_services'},
+    {id:'docs', ic:'⎘', key:'nav_docs'},
+    {id:'reports', ic:'▥', key:'nav_reports'},
+    {id:'settings', ic:'⚙', key:'nav_settings'},
+   ];
+
+export const salesChart = [42,55,38,61,49,72,65,80,58,90,76,95];
+export const monthsAr=['ينا','فبر','مار','أبر','ماي','يون','يول','أغس','سبت','أكت','نوف','ديس'];
+export const monthsEn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
