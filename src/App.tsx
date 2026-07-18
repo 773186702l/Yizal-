@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import LoginScreen from './components/LoginScreen';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
@@ -479,6 +480,7 @@ export default function App() {
                   </div>
               </div>
           )}
+          <Analytics />
       </div>
   );
 }
