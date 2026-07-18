@@ -15,6 +15,7 @@ export default function LoginScreen({ onLogin, state, onToggleLang }: LoginScree
     const [passwordInput, setPasswordInput] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
     const isRtl = state.lang === 'ar';
@@ -23,6 +24,7 @@ export default function LoginScreen({ onLogin, state, onToggleLang }: LoginScree
     const handleLoginSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(false);
+        setErrorMessage(null);
         setLoading(true);
 
         const email = `${usernameInput.trim().toLowerCase()}@yazal-erp.com`;
@@ -37,21 +39,25 @@ export default function LoginScreen({ onLogin, state, onToggleLang }: LoginScree
             if (authError) throw authError;
 
             // 2. Find matching user profile in state
-            const matchedUser = state.usersList.find(u => u.username.trim().toLowerCase() === usernameInput.trim().toLowerCase());
+            // Normalize inputs for matching
+            const normalizedInput = usernameInput.trim().toLowerCase();
+            const matchedUser = state.usersList.find(u => u.username.trim().toLowerCase() === normalizedInput);
 
             if (!matchedUser) {
-                const fallbackUser = accounts.find(u => u.username.trim().toLowerCase() === usernameInput.trim().toLowerCase());
+                // Fallback to accounts array in data.ts if state hasn't synced yet
+                const fallbackUser = accounts.find(u => u.username.trim().toLowerCase() === normalizedInput);
                 if (fallbackUser) {
                     onLogin(fallbackUser);
                     return;
                 }
-                throw new Error("User profile not found");
+                throw new Error(isRtl ? "لم يتم العثور على ملف المستخدم في النظام" : "User profile not found in system records");
             }
 
             onLogin(matchedUser);
         } catch (err: any) {
-            console.error('Login error:', err);
+            console.error('Login error details:', err);
             setError(true);
+            setErrorMessage(err.message || String(err));
         } finally {
             setLoading(false);
         }
@@ -234,7 +240,7 @@ export default function LoginScreen({ onLogin, state, onToggleLang }: LoginScree
                             fontWeight: 500,
                             lineHeight: '1.4'
                         }}>
-                            ⚠️ {t('login_err')}
+                            ⚠️ {errorMessage || t('login_err')}
                         </div>
                     )}
 
