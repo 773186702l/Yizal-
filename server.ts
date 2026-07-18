@@ -5,20 +5,22 @@ import { GoogleGenAI } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 
 // Initialize Supabase Admin (using service role key)
+const isJwt = (k: string) => !!k && k.startsWith('eyJ') && k.split('.').length === 3;
+const isSbKey = (k: string) => !!k && k.startsWith('sb_');
+const isDbUrl = (k: string) => !!k && (k.startsWith('postgresql://') || k.startsWith('postgres://'));
+
 let _supabase: any = null;
 function getSupabase() {
   if (!_supabase) {
     const rawUrl = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
     const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
     
-    const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+    const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || '').trim();
     const secretKey = (process.env.SUPABASE_SECRET_KEY || '').trim();
     const anonKey = (process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '').trim();
-    const pubKey = (process.env.SUPABASE_PUBLISHABLE_KEY || '').trim();
+    const pubKey = (process.env.SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '').trim();
     
-    const isJwt = (k: string) => k.startsWith('eyJ') && k.split('.').length === 3;
-    const isSbKey = (k: string) => k.startsWith('sb_');
-    const isDbUrl = (k: string) => k.startsWith('postgresql://') || k.startsWith('postgres://');
+    console.log(`[Supabase Config] URL: ${supabaseUrl ? 'Set' : 'Missing'}, Key: ${serviceKey ? 'ServiceRole' : (anonKey ? 'Anon' : 'Missing')}`);
     
     if (!supabaseUrl) {
       console.error('CRITICAL: Supabase URL is missing in server environment');
@@ -394,7 +396,7 @@ async function startServer() {
   async function generateWithRetry(prompt: any, retries = 2): Promise<any> {
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-flash-latest",
+        model: "gemini-2.5-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -405,10 +407,10 @@ async function startServer() {
     } catch (error: any) {
       console.error('Gemini error:', error);
       if (error.message?.includes('quota') || error.message?.includes('429')) {
-        console.warn('Quota exceeded, trying gemini-3.1-flash-lite...');
+        console.warn('Quota exceeded, trying fallback...');
         try {
           const fallbackResponse = await ai.models.generateContent({
-            model: "gemini-3.1-flash-lite",
+            model: "gemini-1.5-pro",
             contents: prompt,
             config: {
               responseMimeType: "application/json",
@@ -459,6 +461,33 @@ async function startServer() {
     } catch (error) {
       console.error('Categorize error:', error);
       res.status(500).json({ error: "Failed to categorize documents" });
+    }
+  });
+
+  // Example of a protected API route (similar to the Next.js Auth0 example provided)
+  app.get("/api/protected-route", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const token = authHeader.split(' ')[1];
+      const supabase = getSupabase();
+      
+      // Verify the token with Supabase
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+
+      if (error || !user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      res.json({
+        message: "This is a protected API route",
+        user: user
+      });
+    } catch (e) {
+      res.status(500).json({ error: "Internal Server Error" });
     }
   });
 

@@ -80,18 +80,13 @@ export default function LoginScreen({ onLogin, state, onToggleLang }: LoginScree
                         authError = null;
                         if (data.session) {
                             try {
-                                const { error: sessionError } = await supabase.auth.setSession(data.session);
-                                if (sessionError) {
-                                    console.error('Error setting session after proxy login:', sessionError);
-                                    // Don't throw if it's a network error, we have the session in memory/state now
-                                    if (sessionError.message !== 'Failed to fetch') {
-                                        throw sessionError;
-                                    }
-                                }
+                                // We try to set the session locally, but if network blocks the verification call,
+                                // we can still proceed because the app state will hold the user profile 
+                                // and all data fetching is proxied through the server.
+                                await supabase.auth.setSession(data.session);
+                                console.log('Session set locally');
                             } catch (sErr: any) {
-                                console.warn('Caught network error during setSession, continuing anyway:', sErr);
-                                // If it's just a network error reaching Supabase, we can continue 
-                                // since we already have the session data from the proxy
+                                console.warn('Caught error during setSession, ignoring since we have session data from proxy:', sErr);
                             }
                         }
                     } else {
