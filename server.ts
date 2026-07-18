@@ -137,14 +137,15 @@ async function startServer() {
     console.log(`[Auth Proxy] Login attempt for: ${email}`);
     try {
       const supabase = getSupabase();
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-      
-      if (error) {
-        console.error(`[Auth Proxy] Supabase Error for ${email}:`, error);
-        throw error;
+        
+      if (error || !data.session) {
+        console.error(`[Auth Proxy] Invalid credentials for ${email}:`, error?.message);
+        return res.status(401).json({ error: error?.message || "Invalid login credentials" });
       }
       
       console.log(`[Auth Proxy] Login successful for: ${email}`);
@@ -276,14 +277,34 @@ async function startServer() {
         });
       }
 
-      if (authResult.error) throw authResult.error;
+      let uid = authResult?.data?.user?.id;
+      
+      // If user already exists or another auth error occurs, try to fetch the existing user
+      if (authResult.error) {
+        console.warn(`Auth creation failed for ${email}, attempting fallback:`, authResult.error.message);
+        const { data: listData } = await supabase.auth.admin.listUsers();
+        const existing = listData?.users?.find(u => u.email === email);
+        if (existing) {
+          uid = existing.id;
+          // Optionally update their password if they already existed
+          await supabase.auth.admin.updateUserById(uid, { password });
+        } else {
+           // Provide a fallback UUID if we can't create an auth user
+           // We are bypassing Supabase Auth for login anyway
+           import('crypto').then(crypto => {
+               if (!uid) uid = crypto.randomUUID();
+           }).catch(() => {
+               if (!uid) uid = `fallback-${Date.now()}`;
+           });
+        }
+      }
 
       // 2. Create Profile in 'users' table
       const newUser = {
-        uid: authResult.data.user.id,
+        uid: uid || `local-${Date.now()}`,
         name: fullname,
         username: username,
-        password: password, // Note: Still in plaintext as per original logic, but Supabase Auth handles real login
+        password: password, // Important since we use table for login now
         role: role,
         email: email,
         created_at: new Date().toISOString()

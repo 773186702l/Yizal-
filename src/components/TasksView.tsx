@@ -14,6 +14,7 @@ export default function TasksView({ state, onUpdateState }: TasksViewProps) {
     const [showModal, setShowModal] = useState(false);
     const [activeFilterTag, setActiveFilterTag] = useState<string | null>(null);
     const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+    const [sortBy, setSortBy] = useState<'none' | 'priority-high' | 'priority-low' | 'due-earliest' | 'due-latest'>('none');
     
     const tasks = state.tasks || [];
     const customTags = state.customTags || [];
@@ -36,9 +37,33 @@ export default function TasksView({ state, onUpdateState }: TasksViewProps) {
     };
 
     // Filter tasks based on active tag filter
-    const filteredTasks = activeFilterTag
+    let filteredTasks = activeFilterTag
         ? tasks.filter(t => t.tags && t.tags.includes(activeFilterTag))
-        : tasks;
+        : [...tasks];
+
+    // Apply Sorting
+    filteredTasks.sort((a, b) => {
+        if (sortBy === 'priority-high' || sortBy === 'priority-low') {
+            const priorityWeight = { high: 3, medium: 2, low: 1 };
+            const weightA = priorityWeight[a.priority as keyof typeof priorityWeight] || 0;
+            const weightB = priorityWeight[b.priority as keyof typeof priorityWeight] || 0;
+            
+            if (weightA !== weightB) {
+                return sortBy === 'priority-high' ? weightB - weightA : weightA - weightB;
+            }
+        }
+        
+        if (sortBy === 'due-earliest' || sortBy === 'due-latest') {
+            const timeA = new Date(a.dueDate || 0).getTime();
+            const timeB = new Date(b.dueDate || 0).getTime();
+            
+            if (timeA !== timeB) {
+                return sortBy === 'due-earliest' ? timeA - timeB : timeB - timeA;
+            }
+        }
+        
+        return 0;
+    });
 
     const toggleSelect = (id: string) => {
         setSelectedTaskIds(prev => 
@@ -209,74 +234,117 @@ export default function TasksView({ state, onUpdateState }: TasksViewProps) {
                 </div>
             )}
 
-            {/* Tags Filtering Section */}
+            {/* Controls Section (Filters & Sorting) */}
             <div style={{ 
                 backgroundColor: 'var(--surface)', 
                 border: '1px solid var(--border)', 
                 borderRadius: '12px', 
                 padding: '16px', 
                 marginBottom: '20px', 
-                boxShadow: 'var(--shadow)' 
+                boxShadow: 'var(--shadow)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                flexWrap: 'wrap',
+                gap: '20px'
             }}>
-                <div style={{ 
-                    fontSize: '12.5px', 
-                    fontWeight: 600, 
-                    color: 'var(--text-muted)', 
-                    marginBottom: '10px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                }}>
-                    <span>🔍</span>
-                    <span>{t('tag_filter')}</span>
+                <div style={{ flex: 1, minWidth: '280px' }}>
+                    <div style={{ 
+                        fontSize: '12.5px', 
+                        fontWeight: 600, 
+                        color: 'var(--text-muted)', 
+                        marginBottom: '10px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                    }}>
+                        <span>🔍</span>
+                        <span>{t('tag_filter')}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {/* All Tags filter */}
+                        <button
+                            onClick={() => setActiveFilterTag(null)}
+                            style={{
+                                padding: '6px 14px',
+                                borderRadius: '20px',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                border: '1px solid var(--border)',
+                                backgroundColor: activeFilterTag === null ? 'var(--ink-900)' : 'var(--surface-2)',
+                                color: activeFilterTag === null ? '#F3E4C8' : 'var(--text)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            {t('tag_all')}
+                        </button>
+
+                        {/* Individual tag filters */}
+                        {customTags.map(tag => {
+                            const isActive = activeFilterTag === tag.name;
+                            return (
+                                <button
+                                    key={tag.name}
+                                    onClick={() => setActiveFilterTag(isActive ? null : tag.name)}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '6px 14px',
+                                        borderRadius: '20px',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        border: `1.5px solid ${tag.color}`,
+                                        backgroundColor: isActive ? tag.color : 'transparent',
+                                        color: isActive ? '#FFFFFF' : 'var(--text)',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        transform: isActive ? 'scale(1.05)' : 'none'
+                                    }}
+                                >
+                                    <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isActive ? '#FFFFFF' : tag.color }} />
+                                    {tag.name}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                    {/* All Tags filter */}
-                    <button
-                        onClick={() => setActiveFilterTag(null)}
+
+                <div style={{ minWidth: '200px' }}>
+                    <div style={{ 
+                        fontSize: '12.5px', 
+                        fontWeight: 600, 
+                        color: 'var(--text-muted)', 
+                        marginBottom: '10px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                    }}>
+                        <span>🔃</span>
+                        <span>{isRtl ? 'ترتيب حسب' : 'Sort By'}</span>
+                    </div>
+                    <select 
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as any)}
                         style={{
-                            padding: '6px 14px',
-                            borderRadius: '20px',
-                            fontSize: '12px',
-                            fontWeight: 600,
+                            width: '100%',
+                            padding: '8px 12px',
+                            borderRadius: '8px',
                             border: '1px solid var(--border)',
-                            backgroundColor: activeFilterTag === null ? 'var(--ink-900)' : 'var(--surface-2)',
-                            color: activeFilterTag === null ? '#F3E4C8' : 'var(--text)',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s'
+                            backgroundColor: 'var(--surface)',
+                            color: 'var(--text)',
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            cursor: 'pointer'
                         }}
                     >
-                        {t('tag_all')}
-                    </button>
-
-                    {/* Individual tag filters */}
-                    {customTags.map(tag => {
-                        const isActive = activeFilterTag === tag.name;
-                        return (
-                            <button
-                                key={tag.name}
-                                onClick={() => setActiveFilterTag(isActive ? null : tag.name)}
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    padding: '6px 14px',
-                                    borderRadius: '20px',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    border: `1.5px solid ${tag.color}`,
-                                    backgroundColor: isActive ? tag.color : 'transparent',
-                                    color: isActive ? '#FFFFFF' : 'var(--text)',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    transform: isActive ? 'scale(1.05)' : 'none'
-                                }}
-                            >
-                                <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isActive ? '#FFFFFF' : tag.color }} />
-                                {tag.name}
-                            </button>
-                        );
-                    })}
+                        <option value="none">{isRtl ? 'الافتراضي' : 'Default'}</option>
+                        <option value="priority-high">{isRtl ? 'الأولوية (الأعلى أولاً)' : 'Priority (High First)'}</option>
+                        <option value="priority-low">{isRtl ? 'الأولوية (الأدنى أولاً)' : 'Priority (Low First)'}</option>
+                        <option value="due-earliest">{isRtl ? 'تاريخ الاستحقاق (الأقرب)' : 'Due Date (Earliest)'}</option>
+                        <option value="due-latest">{isRtl ? 'تاريخ الاستحقاق (الأبعد)' : 'Due Date (Latest)'}</option>
+                    </select>
                 </div>
             </div>
 

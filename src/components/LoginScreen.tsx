@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { T, accounts } from '../data';
 import { AppState, User } from '../types';
 import { Shield, User as UserIcon, Lock, Eye, EyeOff, Globe, Sparkles } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { signIn } from '../lib/db';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface LoginScreenProps {
     onLogin: (user: User) => void;
@@ -21,6 +22,41 @@ export default function LoginScreen({ onLogin, state, onToggleLang }: LoginScree
     const isRtl = state.lang === 'ar';
     const t = (k: string) => T[state.lang][k] || k;
 
+    useEffect(() => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (session?.user?.email) {
+                const email = session.user.email;
+                const username = email.includes('@yazal-erp.com') 
+                    ? email.split('@')[0] 
+                    : email;
+                
+                const normalizedInput = username.trim().toLowerCase();
+                const matchedUser = state.usersList.find(u => u.username.trim().toLowerCase() === normalizedInput);
+                
+                if (matchedUser) {
+                    onLogin(matchedUser);
+                } else {
+                    const fallbackUser = accounts.find(u => u.username.trim().toLowerCase() === normalizedInput);
+                    if (fallbackUser) {
+                        onLogin(fallbackUser);
+                    }
+                }
+            }
+        });
+
+        return () => subscription.unsubscribe();
+    }, [state.usersList, onLogin]);
+
+    useEffect(() => {
+        if (error) {
+            const timer = setTimeout(() => {
+                setError(false);
+                setErrorMessage(null);
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [error]);
+
     const handleLoginSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(false);
@@ -32,91 +68,40 @@ export default function LoginScreen({ onLogin, state, onToggleLang }: LoginScree
 
         try {
             // 0. Check configuration
-            const { isSupabaseConfigured } = await import('../lib/supabase');
             if (!isSupabaseConfigured()) {
                 const configErr = isRtl 
                     ? "لم يتم تهيئة Supabase بشكل صحيح. يرجى التأكد من إضافة VITE_SUPABASE_URL و VITE_SUPABASE_ANON_KEY في الإعدادات." 
                     : "Supabase is not configured correctly. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in settings.";
-                throw new Error(configErr);
+                setError(true);
+                setErrorMessage(configErr);
+                return;
             }
 
             // 1. Authenticate with Supabase
-            let authData = null;
-            let authError = null;
-
-            try {
-                const result = await supabase.auth.signInWithPassword({
-                    email,
-                    password: passwordInput,
-                });
-                authData = result.data;
-                authError = result.error;
-            } catch (fetchErr: any) {
-                console.warn('Supabase Auth call threw an error:', fetchErr);
-                authError = fetchErr;
-            }
-
-            // Fallback to server-side login if direct attempt fails or returns a network error
-            const isNetworkError = authError && (
-                authError.message === 'Failed to fetch' || 
-                authError.message?.includes('Network') ||
-                authError.name === 'TypeError' ||
-                authError.code === 'CONFIG_MISSING' ||
-                !authError.status // Supabase errors usually have a status if they reached the server
-            );
-
-            if (authError && isNetworkError) {
-                console.warn('Direct login likely failed due to network or config, trying server-side proxy...');
-                try {
-                    const proxyResponse = await fetch('/api/auth/login', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email, password: passwordInput })
-                    });
-                    
-                    if (proxyResponse.ok) {
-                        const data = await proxyResponse.json();
-                        console.log('Server-side login proxy success');
-                        authError = null;
-                        if (data.session) {
-                            try {
-                                // We try to set the session locally, but if network blocks the verification call,
-                                // we can still proceed because the app state will hold the user profile 
-                                // and all data fetching is proxied through the server.
-                                await supabase.auth.setSession(data.session);
-                                console.log('Session set locally');
-                            } catch (sErr: any) {
-                                console.warn('Caught error during setSession, ignoring since we have session data from proxy:', sErr);
-                            }
-                        }
-                    } else {
-                        const errData = await proxyResponse.json();
-                        // If proxy also returns an error, use the most descriptive one
-                        authError = new Error(errData.error || 'Login failed via proxy');
-                    }
-                } catch (proxyErr: any) {
-                    console.error('Login proxy also failed:', proxyErr);
-                    // authError remains the original error
-                }
-            }
+            const { error: authError } = await signIn(email, passwordInput);
 
             if (authError) {
-                console.error('Supabase Auth Error:', authError);
-                
                 // Handle specific common errors
                 if (authError.message === 'Failed to fetch' || authError.message?.includes('proxy')) {
                     const errorMsg = isRtl 
                         ? "فشل الاتصال بالخادم. يرجى التأكد من اتصالك بالإنترنت ومن أن مشروع Supabase نشط في الإعدادات." 
                         : "Network error: Failed to reach server. Please ensure your internet connection is stable and Supabase is active.";
-                    throw new Error(errorMsg);
+                    setError(true);
+                    setErrorMessage(errorMsg);
+                    return;
                 }
                 
                 // Handle credential errors
                 if (authError.message === 'Invalid login credentials') {
-                    throw new Error(isRtl ? "اسم المستخدم أو كلمة المرور غير صحيحة" : "Invalid username or password");
+                    const errorMsg = isRtl ? "اسم المستخدم أو كلمة المرور غير صحيحة" : "Invalid username or password";
+                    setError(true);
+                    setErrorMessage(errorMsg);
+                    return;
                 }
 
-                throw authError;
+                setError(true);
+                setErrorMessage(authError.message);
+                return;
             }
 
             // 2. Find matching user profile in state
@@ -131,12 +116,14 @@ export default function LoginScreen({ onLogin, state, onToggleLang }: LoginScree
                     onLogin(fallbackUser);
                     return;
                 }
-                throw new Error(isRtl ? "لم يتم العثور على ملف المستخدم في النظام" : "User profile not found in system records");
+                
+                setError(true);
+                setErrorMessage(isRtl ? "لم يتم العثور على ملف المستخدم في النظام" : "User profile not found in system records");
+                return;
             }
 
             onLogin(matchedUser);
         } catch (err: any) {
-            console.error('Login error details:', err);
             setError(true);
             setErrorMessage(err.message || String(err));
         } finally {
@@ -156,6 +143,39 @@ export default function LoginScreen({ onLogin, state, onToggleLang }: LoginScree
             position: 'relative',
             overflowY: 'auto'
         }}>
+            {/* Floating Toast Notification */}
+            {error && (
+                <div style={{
+                    position: 'absolute',
+                    top: '24px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    zIndex: 1000,
+                    background: 'var(--danger, #EF4444)',
+                    color: '#fff',
+                    padding: '12px 20px',
+                    borderRadius: '30px',
+                    boxShadow: '0 8px 16px rgba(0,0,0,0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    animation: 'toastSlideIn 0.3s ease-out forwards',
+                    maxWidth: '90%',
+                    textAlign: 'center'
+                }}>
+                    <style>{`
+                        @keyframes toastSlideIn {
+                            from { opacity: 0; transform: translate(-50%, -20px); }
+                            to { opacity: 1; transform: translate(-50%, 0); }
+                        }
+                    `}</style>
+                    <span>⚠️</span>
+                    <span>{errorMessage || t('login_err')}</span>
+                </div>
+            )}
+
             {/* Elegant Language switcher at top right/left */}
             <div style={{
                 position: 'absolute',
@@ -309,21 +329,6 @@ export default function LoginScreen({ onLogin, state, onToggleLang }: LoginScree
                             </button>
                         </div>
                     </div>
-
-                    {error && (
-                        <div style={{
-                            padding: '10px 14px',
-                            background: 'var(--danger-bg)',
-                            color: 'var(--danger)',
-                            borderLeft: '4px solid var(--danger)',
-                            borderRadius: '8px',
-                            fontSize: '12.5px',
-                            fontWeight: 500,
-                            lineHeight: '1.4'
-                        }}>
-                            ⚠️ {errorMessage || t('login_err')}
-                        </div>
-                    )}
 
                     <button 
                         type="submit" 

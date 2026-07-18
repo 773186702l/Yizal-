@@ -364,3 +364,27 @@ export async function initSupabaseAuth() {
     // Supabase client handles persistent session automatically in browser
     console.log("Supabase Auth initialized.");
 }
+
+// Explicit Supabase Client Methods for Auth
+import { supabase } from './supabase';
+
+export async function signIn(email: string, password: string) {
+    if (!isSupabaseConfigured()) throw new Error("Supabase is not configured.");
+    return await supabase.auth.signInWithPassword({ email, password });
+}
+
+export async function signUp(email: string, password: string, name?: string) {
+    if (!isSupabaseConfigured()) throw new Error("Supabase is not configured.");
+    return await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+            data: { full_name: name }
+        }
+    });
+}
+
+export async function signOut() {
+    if (!isSupabaseConfigured()) return;
+    return await supabase.auth.signOut();
+}

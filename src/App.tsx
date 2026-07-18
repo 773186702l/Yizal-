@@ -115,7 +115,7 @@ const initialRequests: ServiceRequest[] = [
 ];
 
 export default function App() {
-  const [dbLoading, setDbLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [state, setState] = useState<AppState>({
@@ -137,7 +137,7 @@ export default function App() {
 
   // Async load database from real cloud Supabase
   useEffect(() => {
-      async function initializeCloud() {
+      async function initializeCloud(retries = 3, delay = 1000) {
           try {
               // 1. Auth check
               await initSupabaseAuth();
@@ -182,12 +182,20 @@ export default function App() {
                   serviceTypes: loadedServiceTypes,
                   customTags: loadedCustomTags
               }));
+              
+              setIsInitializing(false);
           } catch (error) {
               console.error("Critical error loading live cloud DB:", error);
-          } finally {
-              setDbLoading(false);
+              if (retries > 0) {
+                  console.log(`Retrying in ${delay}ms... (${retries} retries left)`);
+                  await new Promise(resolve => setTimeout(resolve, delay));
+                  return initializeCloud(retries - 1, delay * 2);
+              } else {
+                  setIsInitializing(false);
+              }
           }
       }
+
       initializeCloud();
   }, []);
 
@@ -420,6 +428,29 @@ export default function App() {
               );
       }
   };
+
+  if (isInitializing) {
+      return (
+          <div data-theme={state.theme} className={state.lang === 'ar' ? 'rtl' : 'ltr'} dir={state.lang === 'ar' ? 'rtl' : 'ltr'}>
+              <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{
+                      width: '40px',
+                      height: '40px',
+                      border: '4px solid var(--border-color, #eaeaea)',
+                      borderTopColor: 'var(--primary, #0f52ba)',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                  }} />
+                  <style>{`
+                      @keyframes spin {
+                          0% { transform: rotate(0deg); }
+                          100% { transform: rotate(360deg); }
+                      }
+                  `}</style>
+              </div>
+          </div>
+      );
+  }
 
   return (
       <div data-theme={state.theme} className={state.lang === 'ar' ? 'rtl' : 'ltr'} dir={state.lang === 'ar' ? 'rtl' : 'ltr'}>

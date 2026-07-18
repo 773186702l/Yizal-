@@ -118,12 +118,12 @@ export const T: Record<string, Record<string, string>> = {
 };
 
 export const accounts: User[] = [
-    {username:'laithhazza1@gmail.com', password:'1234', role:'admin', name:'ليث هزاع'},
-    {username:'laithhazza09@gmail.com', password:'1234', role:'admin', name:'ليث هزاع'},
-    {username:'admin', password:'1234', role:'admin', name:'محمد الأمين'},
-    {username:'accountant1', password:'1234', role:'accountant', name:'سارة يوسف'},
-    {username:'sales1', password:'1234', role:'sales', name:'خالد عمر'},
-    {username:'exec1', password:'1234', role:'executor', name:'نور خليفة'},
+    {username:'laithhazza1@gmail.com', password:'123456', role:'admin', name:'ليث هزاع'},
+    {username:'laithhazza09@gmail.com', password:'123456', role:'admin', name:'ليث هزاع'},
+    {username:'admin', password:'123456', role:'admin', name:'محمد الأمين'},
+    {username:'accountant1', password:'123456', role:'accountant', name:'سارة يوسف'},
+    {username:'sales1', password:'123456', role:'sales', name:'خالد عمر'},
+    {username:'exec1', password:'123456', role:'executor', name:'نور خليفة'},
    ];
 
 export const PERMS: Record<string, string[]> = {
