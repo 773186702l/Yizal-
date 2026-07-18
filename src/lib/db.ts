@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from "./supabase";
+import { isSupabaseConfigured } from "./supabase";
 import { 
     User, 
     Customer, 
@@ -18,44 +18,103 @@ import {
     initialServiceTypes 
 } from "../data";
 
+// Helper for API proxy calls
+async function fetchFromApi(table: string): Promise<any[]> {
+    try {
+        const response = await fetch(`/api/db/${table}`);
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || `HTTP error! status: ${response.status}`);
+        }
+        return await response.json();
+    } catch (e) {
+        console.error(`API Fetch Error [${table}]:`, e);
+        throw e;
+    }
+}
+
+async function saveToApi(table: string, data: any, onConflict: string = 'id'): Promise<void> {
+    try {
+        const response = await fetch(`/api/db/${table}?onConflict=${onConflict}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || `HTTP error! status: ${response.status}`);
+        }
+    } catch (e) {
+        console.error(`API Save Error [${table}]:`, e);
+        throw e;
+    }
+}
+
+async function deleteFromApi(table: string, column: string, value: string): Promise<void> {
+    try {
+        const response = await fetch(`/api/db/${table}?column=${column}&value=${value}`, {
+            method: 'DELETE'
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || `HTTP error! status: ${response.status}`);
+        }
+    } catch (e) {
+        console.error(`API Delete Error [${table}]:`, e);
+        throw e;
+    }
+}
+
 // Unified Error Logger
 function logDbError(err: any, op: string, table: string) {
     if (!isSupabaseConfigured()) return;
-    const errMsg = err instanceof Error ? err.message : String(err);
-    console.error(`Supabase Error [${op}] on table [${table}]:`, errMsg);
+    
+    let errorDetail = '';
+    if (err && typeof err === 'object') {
+        errorDetail = err.message || err.details || JSON.stringify(err);
+        if (err.code) errorDetail += ` (Code: ${err.code})`;
+    } else {
+        errorDetail = String(err);
+    }
+    
+    console.error(`Supabase Error [${op}] on table [${table}]: ${errorDetail}`);
 }
 
 // 1. Users List Operations
 export async function loadUsers(): Promise<User[]> {
     if (!isSupabaseConfigured()) return accounts;
     try {
-        const { data, error } = await supabase
-            .from('users')
-            .select('*');
-
-        if (error) throw error;
+        // Use API proxy
+        const data = await fetchFromApi('users');
 
         if (!data || data.length === 0) {
-            // Seed (Note: insert many)
-            await supabase.from('users').insert(accounts);
             return accounts;
         }
 
-        // Check for specific manager users as per original logic
-        const list = data as User[];
+        // Map and ensure defaults
+        const list = (data as any[]).map(u => ({
+            ...u,
+            status: u.status || 'active',
+            role: u.role || 'employee'
+        })) as User[];
+        
         const managers = ['laithhazza1@gmail.com', 'laithhazza09@gmail.com'];
         for (const m of managers) {
             if (!list.some(u => u.username === m)) {
                 const managerUser = accounts.find(u => u.username === m);
                 if (managerUser) {
-                    await supabase.from('users').insert(managerUser);
-                    list.push(managerUser);
+                    try {
+                        await saveToApi('users', managerUser, 'username');
+                        list.push(managerUser);
+                    } catch (e) {
+                         // Ignore insert errors during auto-sync
+                    }
                 }
             }
         }
         return list;
     } catch (e) {
-        logDbError(e, "select", "users");
+        logDbError(e, "loadUsers_catch", "users");
         return accounts;
     }
 }
@@ -63,10 +122,7 @@ export async function loadUsers(): Promise<User[]> {
 export async function saveUserToDb(user: User): Promise<void> {
     if (!isSupabaseConfigured()) return;
     try {
-        const { error } = await supabase
-            .from('users')
-            .upsert(user, { onConflict: 'username' });
-        if (error) throw error;
+        await saveToApi('users', user, 'username');
     } catch (e) {
         logDbError(e, "upsert", "users");
     }
@@ -75,11 +131,7 @@ export async function saveUserToDb(user: User): Promise<void> {
 export async function deleteUserFromDb(username: string): Promise<void> {
     if (!isSupabaseConfigured()) return;
     try {
-        const { error } = await supabase
-            .from('users')
-            .delete()
-            .eq('username', username);
-        if (error) throw error;
+        await deleteFromApi('users', 'username', username);
     } catch (e) {
         logDbError(e, "delete", "users");
     }
@@ -89,14 +141,9 @@ export async function deleteUserFromDb(username: string): Promise<void> {
 export async function loadCustomers(): Promise<Customer[]> {
     if (!isSupabaseConfigured()) return initialCustomers;
     try {
-        const { data, error } = await supabase
-            .from('customers')
-            .select('*');
-
-        if (error) throw error;
+        const data = await fetchFromApi('customers');
 
         if (!data || data.length === 0) {
-            await supabase.from('customers').insert(initialCustomers);
             return initialCustomers;
         }
         return data as Customer[];
@@ -109,10 +156,7 @@ export async function loadCustomers(): Promise<Customer[]> {
 export async function saveCustomerToDb(cust: Customer): Promise<void> {
     if (!isSupabaseConfigured()) return;
     try {
-        const { error } = await supabase
-            .from('customers')
-            .upsert(cust, { onConflict: 'code' });
-        if (error) throw error;
+        await saveToApi('customers', cust, 'code');
     } catch (e) {
         logDbError(e, "upsert", "customers");
     }
@@ -122,14 +166,9 @@ export async function saveCustomerToDb(cust: Customer): Promise<void> {
 export async function loadVisaApps(): Promise<VisaApp[]> {
     if (!isSupabaseConfigured()) return initialVisaApps;
     try {
-        const { data, error } = await supabase
-            .from('visa_apps')
-            .select('*');
-
-        if (error) throw error;
+        const data = await fetchFromApi('visa_apps');
 
         if (!data || data.length === 0) {
-            await supabase.from('visa_apps').insert(initialVisaApps);
             return initialVisaApps;
         }
         return data as VisaApp[];
@@ -142,10 +181,7 @@ export async function loadVisaApps(): Promise<VisaApp[]> {
 export async function saveVisaAppToDb(visa: VisaApp): Promise<void> {
     if (!isSupabaseConfigured()) return;
     try {
-        const { error } = await supabase
-            .from('visa_apps')
-            .upsert(visa, { onConflict: 'id' });
-        if (error) throw error;
+        await saveToApi('visa_apps', visa, 'id');
     } catch (e) {
         logDbError(e, "upsert", "visa_apps");
     }
@@ -155,14 +191,9 @@ export async function saveVisaAppToDb(visa: VisaApp): Promise<void> {
 export async function loadInvoices(): Promise<Invoice[]> {
     if (!isSupabaseConfigured()) return initialInvoices;
     try {
-        const { data, error } = await supabase
-            .from('invoices')
-            .select('*');
-
-        if (error) throw error;
+        const data = await fetchFromApi('invoices');
 
         if (!data || data.length === 0) {
-            await supabase.from('invoices').insert(initialInvoices);
             return initialInvoices;
         }
         return data as Invoice[];
@@ -175,10 +206,7 @@ export async function loadInvoices(): Promise<Invoice[]> {
 export async function saveInvoiceToDb(inv: Invoice): Promise<void> {
     if (!isSupabaseConfigured()) return;
     try {
-        const { error } = await supabase
-            .from('invoices')
-            .upsert(inv, { onConflict: 'no' });
-        if (error) throw error;
+        await saveToApi('invoices', inv, 'no');
     } catch (e) {
         logDbError(e, "upsert", "invoices");
     }
@@ -188,14 +216,9 @@ export async function saveInvoiceToDb(inv: Invoice): Promise<void> {
 export async function loadExpenses(): Promise<Expense[]> {
     if (!isSupabaseConfigured()) return initialExpenses;
     try {
-        const { data, error } = await supabase
-            .from('expenses')
-            .select('*');
-
-        if (error) throw error;
+        const data = await fetchFromApi('expenses');
 
         if (!data || data.length === 0) {
-            await supabase.from('expenses').insert(initialExpenses);
             return initialExpenses;
         }
         return data as Expense[];
@@ -208,10 +231,7 @@ export async function loadExpenses(): Promise<Expense[]> {
 export async function saveExpenseToDb(exp: Expense, id: string): Promise<void> {
     if (!isSupabaseConfigured()) return;
     try {
-        const { error } = await supabase
-            .from('expenses')
-            .upsert({ ...exp, id }, { onConflict: 'id' });
-        if (error) throw error;
+        await saveToApi('expenses', { ...exp, id }, 'id');
     } catch (e) {
         logDbError(e, "upsert", "expenses");
     }
@@ -221,14 +241,9 @@ export async function saveExpenseToDb(exp: Expense, id: string): Promise<void> {
 export async function loadServiceRequests(fallbackRequests: ServiceRequest[]): Promise<ServiceRequest[]> {
     if (!isSupabaseConfigured()) return fallbackRequests;
     try {
-        const { data, error } = await supabase
-            .from('service_requests')
-            .select('*');
-
-        if (error) throw error;
+        const data = await fetchFromApi('service_requests');
 
         if (!data || data.length === 0) {
-            await supabase.from('service_requests').insert(fallbackRequests);
             return fallbackRequests;
         }
         return data as ServiceRequest[];
@@ -241,10 +256,7 @@ export async function loadServiceRequests(fallbackRequests: ServiceRequest[]): P
 export async function saveServiceRequestToDb(req: ServiceRequest): Promise<void> {
     if (!isSupabaseConfigured()) return;
     try {
-        const { error } = await supabase
-            .from('service_requests')
-            .upsert(req, { onConflict: 'id' });
-        if (error) throw error;
+        await saveToApi('service_requests', req, 'id');
     } catch (e) {
         logDbError(e, "upsert", "service_requests");
     }
@@ -254,14 +266,9 @@ export async function saveServiceRequestToDb(req: ServiceRequest): Promise<void>
 export async function loadTasks(fallbackTasks: Task[]): Promise<Task[]> {
     if (!isSupabaseConfigured()) return fallbackTasks;
     try {
-        const { data, error } = await supabase
-            .from('tasks')
-            .select('*');
-
-        if (error) throw error;
+        const data = await fetchFromApi('tasks');
 
         if (!data || data.length === 0) {
-            await supabase.from('tasks').insert(fallbackTasks);
             return fallbackTasks;
         }
         return data as Task[];
@@ -274,10 +281,7 @@ export async function loadTasks(fallbackTasks: Task[]): Promise<Task[]> {
 export async function saveTaskToDb(task: Task): Promise<void> {
     if (!isSupabaseConfigured()) return;
     try {
-        const { error } = await supabase
-            .from('tasks')
-            .upsert(task, { onConflict: 'id' });
-        if (error) throw error;
+        await saveToApi('tasks', task, 'id');
     } catch (e) {
         logDbError(e, "upsert", "tasks");
     }
@@ -286,11 +290,7 @@ export async function saveTaskToDb(task: Task): Promise<void> {
 export async function deleteTaskFromDb(id: string): Promise<void> {
     if (!isSupabaseConfigured()) return;
     try {
-        const { error } = await supabase
-            .from('tasks')
-            .delete()
-            .eq('id', id);
-        if (error) throw error;
+        await deleteFromApi('tasks', 'id', id);
     } catch (e) {
         logDbError(e, "delete", "tasks");
     }
@@ -300,18 +300,16 @@ export async function deleteTaskFromDb(id: string): Promise<void> {
 export async function loadServiceTypes(): Promise<string[]> {
     if (!isSupabaseConfigured()) return initialServiceTypes;
     try {
-        const { data, error } = await supabase
-            .from('config')
-            .select('data')
-            .eq('id', 'services')
-            .single();
+        const response = await fetch('/api/db/config');
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error || `HTTP error! status: ${response.status}`);
+        }
+        const configs = await response.json();
+        const data = configs.find((c: any) => c.id === 'services');
 
-        if (error) {
-            if (error.code === 'PGRST116') { // No rows found
-                await supabase.from('config').insert({ id: 'services', data: { types: initialServiceTypes } });
-                return initialServiceTypes;
-            }
-            throw error;
+        if (!data) {
+            return initialServiceTypes;
         }
         return data.data.types as string[];
     } catch (e) {
@@ -323,10 +321,7 @@ export async function loadServiceTypes(): Promise<string[]> {
 export async function saveServiceTypesToDb(types: string[]): Promise<void> {
     if (!isSupabaseConfigured()) return;
     try {
-        const { error } = await supabase
-            .from('config')
-            .upsert({ id: 'services', data: { types } }, { onConflict: 'id' });
-        if (error) throw error;
+        await saveToApi('config', { id: 'services', data: { types } }, 'id');
     } catch (e) {
         logDbError(e, "upsert", "config");
     }
@@ -336,18 +331,16 @@ export async function saveServiceTypesToDb(types: string[]): Promise<void> {
 export async function loadCustomTags(fallbackTags: Tag[]): Promise<Tag[]> {
     if (!isSupabaseConfigured()) return fallbackTags;
     try {
-        const { data, error } = await supabase
-            .from('config')
-            .select('data')
-            .eq('id', 'tags')
-            .single();
+        const response = await fetch('/api/db/config');
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error || `HTTP error! status: ${response.status}`);
+        }
+        const configs = await response.json();
+        const data = configs.find((c: any) => c.id === 'tags');
 
-        if (error) {
-            if (error.code === 'PGRST116') {
-                await supabase.from('config').insert({ id: 'tags', data: { tags: fallbackTags } });
-                return fallbackTags;
-            }
-            throw error;
+        if (!data) {
+            return fallbackTags;
         }
         return data.data.tags as Tag[];
     } catch (e) {
@@ -359,10 +352,7 @@ export async function loadCustomTags(fallbackTags: Tag[]): Promise<Tag[]> {
 export async function saveCustomTagsToDb(tags: Tag[]): Promise<void> {
     if (!isSupabaseConfigured()) return;
     try {
-        const { error } = await supabase
-            .from('config')
-            .upsert({ id: 'tags', data: { tags } }, { onConflict: 'id' });
-        if (error) throw error;
+        await saveToApi('config', { id: 'tags', data: { tags } }, 'id');
     } catch (e) {
         logDbError(e, "upsert", "config");
     }

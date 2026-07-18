@@ -30,13 +30,22 @@ export default function LoginScreen({ onLogin, state, onToggleLang }: LoginScree
         const email = `${usernameInput.trim().toLowerCase()}@yazal-erp.com`;
 
         try {
+            // 0. Check configuration
+            const { isSupabaseConfigured } = await import('../lib/supabase');
+            if (!isSupabaseConfigured()) {
+                throw new Error(isRtl ? "لم يتم تهيئة Supabase. يرجى مراجعة الإعدادات." : "Supabase is not configured. Please check your project settings.");
+            }
+
             // 1. Authenticate with Supabase
-            const { data, error: authError } = await supabase.auth.signInWithPassword({
+            const { error: authError } = await supabase.auth.signInWithPassword({
                 email,
                 password: passwordInput,
             });
 
-            if (authError) throw authError;
+            if (authError) {
+                console.error('Supabase Auth Error:', authError);
+                throw authError;
+            }
 
             // 2. Find matching user profile in state
             // Normalize inputs for matching
