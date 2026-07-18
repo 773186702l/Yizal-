@@ -27,23 +27,100 @@ export default function LoginScreen({ onLogin, state, onToggleLang }: LoginScree
         setErrorMessage(null);
         setLoading(true);
 
-        const email = `${usernameInput.trim().toLowerCase()}@yazal-erp.com`;
+        const userInput = usernameInput.trim().toLowerCase();
+        const email = userInput.includes('@') ? userInput : `${userInput}@yazal-erp.com`;
 
         try {
             // 0. Check configuration
             const { isSupabaseConfigured } = await import('../lib/supabase');
             if (!isSupabaseConfigured()) {
-                throw new Error(isRtl ? "لم يتم تهيئة Supabase. يرجى مراجعة الإعدادات." : "Supabase is not configured. Please check your project settings.");
+                const configErr = isRtl 
+                    ? "لم يتم تهيئة Supabase بشكل صحيح. يرجى التأكد من إضافة VITE_SUPABASE_URL و VITE_SUPABASE_ANON_KEY في الإعدادات." 
+                    : "Supabase is not configured correctly. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in settings.";
+                throw new Error(configErr);
             }
 
             // 1. Authenticate with Supabase
-            const { error: authError } = await supabase.auth.signInWithPassword({
-                email,
-                password: passwordInput,
-            });
+            let authData = null;
+            let authError = null;
+
+            try {
+                const result = await supabase.auth.signInWithPassword({
+                    email,
+                    password: passwordInput,
+                });
+                authData = result.data;
+                authError = result.error;
+            } catch (fetchErr: any) {
+                console.warn('Supabase Auth call threw an error:', fetchErr);
+                authError = fetchErr;
+            }
+
+            // Fallback to server-side login if direct attempt fails or returns a network error
+            const isNetworkError = authError && (
+                authError.message === 'Failed to fetch' || 
+                authError.message?.includes('Network') ||
+                authError.name === 'TypeError' ||
+                authError.code === 'CONFIG_MISSING' ||
+                !authError.status // Supabase errors usually have a status if they reached the server
+            );
+
+            if (authError && isNetworkError) {
+                console.warn('Direct login likely failed due to network or config, trying server-side proxy...');
+                try {
+                    const proxyResponse = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password: passwordInput })
+                    });
+                    
+                    if (proxyResponse.ok) {
+                        const data = await proxyResponse.json();
+                        console.log('Server-side login proxy success');
+                        authError = null;
+                        if (data.session) {
+                            try {
+                                const { error: sessionError } = await supabase.auth.setSession(data.session);
+                                if (sessionError) {
+                                    console.error('Error setting session after proxy login:', sessionError);
+                                    // Don't throw if it's a network error, we have the session in memory/state now
+                                    if (sessionError.message !== 'Failed to fetch') {
+                                        throw sessionError;
+                                    }
+                                }
+                            } catch (sErr: any) {
+                                console.warn('Caught network error during setSession, continuing anyway:', sErr);
+                                // If it's just a network error reaching Supabase, we can continue 
+                                // since we already have the session data from the proxy
+                            }
+                        }
+                    } else {
+                        const errData = await proxyResponse.json();
+                        // If proxy also returns an error, use the most descriptive one
+                        authError = new Error(errData.error || 'Login failed via proxy');
+                    }
+                } catch (proxyErr: any) {
+                    console.error('Login proxy also failed:', proxyErr);
+                    // authError remains the original error
+                }
+            }
 
             if (authError) {
                 console.error('Supabase Auth Error:', authError);
+                
+                // Handle specific common errors
+                if (authError.message === 'Failed to fetch' || authError.message?.includes('proxy')) {
+                    const errorMsg = isRtl 
+                        ? "فشل الاتصال بالخادم. يرجى التأكد من اتصالك بالإنترنت ومن أن مشروع Supabase نشط في الإعدادات." 
+                        : "Network error: Failed to reach server. Please ensure your internet connection is stable and Supabase is active.";
+                    throw new Error(errorMsg);
+                }
+                
+                // Handle credential errors
+                if (authError.message === 'Invalid login credentials') {
+                    throw new Error(isRtl ? "اسم المستخدم أو كلمة المرور غير صحيحة" : "Invalid username or password");
+                }
+
                 throw authError;
             }
 

@@ -8,18 +8,26 @@ import { createClient } from "@supabase/supabase-js";
 let _supabase: any = null;
 function getSupabase() {
   if (!_supabase) {
-    const rawUrl = (process.env.SUPABASE_URL || '').trim();
+    const rawUrl = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
     const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
     
     const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
     const secretKey = (process.env.SUPABASE_SECRET_KEY || '').trim();
-    const anonKey = (process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '').trim();
+    const anonKey = (process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '').trim();
     const pubKey = (process.env.SUPABASE_PUBLISHABLE_KEY || '').trim();
     
     const isJwt = (k: string) => k.startsWith('eyJ') && k.split('.').length === 3;
     const isSbKey = (k: string) => k.startsWith('sb_');
     const isDbUrl = (k: string) => k.startsWith('postgresql://') || k.startsWith('postgres://');
     
+    if (!supabaseUrl) {
+      console.error('CRITICAL: Supabase URL is missing in server environment');
+      return {
+        from: () => ({ select: () => Promise.resolve({ data: null, error: { message: 'Supabase URL missing on server' } }) }),
+        auth: { signInWithPassword: () => Promise.resolve({ data: null, error: { message: 'Supabase URL missing on server' } }) }
+      } as any;
+    }
+
     let supabaseServiceKey = '';
     let keyType = 'NONE';
     
@@ -104,39 +112,60 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
-  // Server Diagnostics
-  app.get("/api/diag", (req, res) => {
-    const rawUrl = (process.env.SUPABASE_URL || '').trim();
-    const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
-    const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-    const secretKey = (process.env.SUPABASE_SECRET_KEY || '').trim();
-    
-    const isJwt = (k: string) => k.startsWith('eyJ') && k.split('.').length === 3;
-    const isSbKey = (k: string) => k.startsWith('sb_');
-
-    res.json({
-      url: supabaseUrl ? `${supabaseUrl.substring(0, 15)}...` : 'MISSING',
-      hasUrl: !!supabaseUrl,
-      serviceKey: {
-        present: !!serviceKey,
-        isJwt: isJwt(serviceKey),
-        isSb: isSbKey(serviceKey),
-        prefix: serviceKey ? serviceKey.substring(0, 12) : 'N/A'
-      },
-      secretKey: {
-        present: !!secretKey,
-        isJwt: isJwt(secretKey),
-        isSb: isSbKey(secretKey),
-        prefix: secretKey ? secretKey.substring(0, 10) : 'N/A'
-      },
-      envKeys: Object.keys(process.env).filter(k => k.includes('SUPABASE'))
-    });
+  // Connectivity Test
+  app.get("/api/test-connectivity", async (req, res) => {
+    try {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.from('users').select('count', { count: 'exact', head: true });
+      if (error) throw error;
+      res.json({ status: 'ok', message: 'Successfully connected to Supabase from server.' });
+    } catch (e: any) {
+      console.error('Connectivity Test Failed:', e);
+      res.status(500).json({ 
+        status: 'error', 
+        message: e.message,
+        hint: 'Check if Supabase project is active and URL is correct.'
+      });
+    }
   });
 
-  // Generic DB Proxy (GET)
+  // Server-side Login Proxy (Fallback)
+  app.post("/api/auth/login", async (req, res) => {
+    const { email, password } = req.body;
+    console.log(`[Auth Proxy] Login attempt for: ${email}`);
+    try {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) {
+        console.error(`[Auth Proxy] Supabase Error for ${email}:`, error);
+        throw error;
+      }
+      
+      console.log(`[Auth Proxy] Login successful for: ${email}`);
+      res.json(data);
+    } catch (e: any) {
+      console.error(`[Auth Proxy] Catch Error for ${email}:`, e);
+      res.status(401).json({ error: e.message || "Authentication failed" });
+    }
+  });
   app.get("/api/db/:table", async (req, res) => {
     try {
-      const { data, error } = await getSupabase().from(req.params.table).select('*');
+      const supabase = getSupabase();
+      let { data, error } = await supabase.from(req.params.table).select('*');
+      
+      // Retry logic for clock skew issues (common in cloud environments)
+      if (error && error.message === 'JWT issued at future') {
+        console.warn(`Clock skew detected for [GET ${req.params.table}]. Retrying in 2s...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const retry = await supabase.from(req.params.table).select('*');
+        data = retry.data;
+        error = retry.error;
+      }
+
       if (error) throw error;
       res.json(data || []);
     } catch (e: any) {
@@ -153,9 +182,22 @@ async function startServer() {
   // Generic DB Proxy (POST/UPSERT)
   app.post("/api/db/:table", async (req, res) => {
     try {
-      const { data, error } = await getSupabase()
+      const supabase = getSupabase();
+      let { data, error } = await supabase
         .from(req.params.table)
         .upsert(req.body, { onConflict: req.query.onConflict as string || 'id' });
+
+      // Retry logic for clock skew
+      if (error && error.message === 'JWT issued at future') {
+        console.warn(`Clock skew detected for [POST ${req.params.table}]. Retrying in 2s...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const retry = await supabase
+          .from(req.params.table)
+          .upsert(req.body, { onConflict: req.query.onConflict as string || 'id' });
+        data = retry.data;
+        error = retry.error;
+      }
+
       if (error) throw error;
       res.json(data || { status: 'ok' });
     } catch (e: any) {
@@ -172,12 +214,26 @@ async function startServer() {
   // Generic DB Proxy (DELETE)
   app.delete("/api/db/:table", async (req, res) => {
     try {
+      const supabase = getSupabase();
       const { column, value } = req.query;
       if (!column || !value) throw new Error("Missing column or value for delete");
-      const { error } = await getSupabase()
+      
+      let { error } = await supabase
         .from(req.params.table)
         .delete()
         .eq(column as string, value as string);
+
+      // Retry logic for clock skew
+      if (error && error.message === 'JWT issued at future') {
+        console.warn(`Clock skew detected for [DELETE ${req.params.table}]. Retrying in 2s...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const retry = await supabase
+          .from(req.params.table)
+          .delete()
+          .eq(column as string, value as string);
+        error = retry.error;
+      }
+
       if (error) throw error;
       res.json({ status: 'ok' });
     } catch (e: any) {
@@ -196,33 +252,57 @@ async function startServer() {
     const { fullname, username, password, role } = req.body;
     
     try {
+      const supabase = getSupabase();
       // 1. Create Auth User in Supabase
       const email = `${username}@yazal-erp.com`;
-      const { data: authData, error: authError } = await getSupabase().auth.admin.createUser({
+      let authResult = await supabase.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
         user_metadata: { full_name: fullname }
       });
 
-      if (authError) throw authError;
+      // Retry logic for clock skew
+      if (authResult.error && authResult.error.message === 'JWT issued at future') {
+        console.warn(`Clock skew detected for [create-user auth]. Retrying in 2s...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        authResult = await supabase.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: { full_name: fullname }
+        });
+      }
+
+      if (authResult.error) throw authResult.error;
 
       // 2. Create Profile in 'users' table
-      const { error: dbError } = await getSupabase()
+      const newUser = {
+        uid: authResult.data.user.id,
+        name: fullname,
+        username: username,
+        password: password, // Note: Still in plaintext as per original logic, but Supabase Auth handles real login
+        role: role,
+        email: email,
+        created_at: new Date().toISOString()
+      };
+
+      let dbResult = await supabase
         .from('users')
-        .insert([{
-          uid: authData.user.id,
-          name: fullname,
-          username: username,
-          password: password, // Note: Still in plaintext as per original logic, but Supabase Auth handles real login
-          role: role,
-          email: email,
-          created_at: new Date().toISOString()
-        }]);
+        .insert([newUser]);
 
-      if (dbError) throw dbError;
+      // Retry logic for clock skew in DB insert
+      if (dbResult.error && dbResult.error.message === 'JWT issued at future') {
+        console.warn(`Clock skew detected for [create-user db]. Retrying in 2s...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        dbResult = await supabase
+          .from('users')
+          .insert([newUser]);
+      }
 
-      res.json({ success: true, uid: authData.user.id });
+      if (dbResult.error) throw dbResult.error;
+
+      res.json({ success: true, uid: authResult.data.user.id });
     } catch (error: any) {
       console.error('Error creating user:', error);
       res.status(500).json({ error: error.message || "Failed to create user" });
@@ -234,19 +314,38 @@ async function startServer() {
     const { username, uid } = req.body;
 
     try {
+      const supabase = getSupabase();
       // 1. Delete from Auth if UID is provided
       if (uid) {
-        const { error: authError } = await getSupabase().auth.admin.deleteUser(uid);
-        if (authError) throw authError;
+        let authResult = await supabase.auth.admin.deleteUser(uid);
+        
+        // Retry logic for clock skew
+        if (authResult.error && authResult.error.message === 'JWT issued at future') {
+          console.warn(`Clock skew detected for [delete-user auth]. Retrying in 2s...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          authResult = await supabase.auth.admin.deleteUser(uid);
+        }
+        
+        if (authResult.error) throw authResult.error;
       }
 
       // 2. Delete from users table
-      const { error: dbError } = await getSupabase()
+      let dbResult = await supabase
         .from('users')
         .delete()
         .eq('username', username);
 
-      if (dbError) throw dbError;
+      // Retry logic for clock skew
+      if (dbResult.error && dbResult.error.message === 'JWT issued at future') {
+        console.warn(`Clock skew detected for [delete-user db]. Retrying in 2s...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        dbResult = await supabase
+          .from('users')
+          .delete()
+          .eq('username', username);
+      }
+
+      if (dbResult.error) throw dbResult.error;
 
       res.json({ success: true });
     } catch (error: any) {
@@ -295,17 +394,34 @@ async function startServer() {
   async function generateWithRetry(prompt: any, retries = 2): Promise<any> {
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-flash-latest",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
         }
       });
-      return JSON.parse(response.text!);
-    } catch (error) {
+      const text = response.text || "{}";
+      return JSON.parse(text);
+    } catch (error: any) {
+      console.error('Gemini error:', error);
+      if (error.message?.includes('quota') || error.message?.includes('429')) {
+        console.warn('Quota exceeded, trying gemini-3.1-flash-lite...');
+        try {
+          const fallbackResponse = await ai.models.generateContent({
+            model: "gemini-3.1-flash-lite",
+            contents: prompt,
+            config: {
+              responseMimeType: "application/json",
+            }
+          });
+          return JSON.parse(fallbackResponse.text || "{}");
+        } catch (innerError) {
+          console.error('Fallback model also failed:', innerError);
+        }
+      }
       if (retries > 0) {
         console.warn(`Retrying Gemini request. Retries left: ${retries}`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 2000));
         return generateWithRetry(prompt, retries - 1);
       }
       throw error;

@@ -1,21 +1,30 @@
 import { createClient } from '@supabase/supabase-js';
 
-const rawUrl = (import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim();
+const rawUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
 const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
 const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim();
 
 export const isSupabaseConfigured = () => {
   const isJwt = (key: string) => key.split('.').length === 3;
   const isSbKey = (key: string) => key.startsWith('sb_');
-  const configured = !!(supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('https://') && (isJwt(supabaseAnonKey) || isSbKey(supabaseAnonKey)));
+  const hasUrl = !!supabaseUrl && supabaseUrl.startsWith('https://');
+  const hasKey = !!supabaseAnonKey && (isJwt(supabaseAnonKey) || isSbKey(supabaseAnonKey));
+  const configured = hasUrl && hasKey;
   
-  if (!configured && typeof window !== 'undefined' && supabaseUrl && supabaseAnonKey) {
-    if (!supabaseUrl.startsWith('https://')) {
-        console.warn('Supabase URL must start with https://');
+  if (!configured && typeof window !== 'undefined') {
+    console.group('Supabase Client Configuration Status');
+    console.log('Configured:', configured);
+    console.log('URL Present:', !!supabaseUrl);
+    console.log('URL Valid:', hasUrl);
+    console.log('Anon Key Present:', !!supabaseAnonKey);
+    console.log('Anon Key Valid:', hasKey);
+    if (supabaseUrl && !supabaseUrl.startsWith('https://')) {
+        console.warn('Supabase URL must start with https://. Current:', supabaseUrl);
     }
-    if (!isJwt(supabaseAnonKey) && !isSbKey(supabaseAnonKey)) {
-        console.warn('Supabase Anon Key must be a valid JWT or start with sb_. Please check your AI Studio Settings.');
+    if (supabaseAnonKey && !isJwt(supabaseAnonKey) && !isSbKey(supabaseAnonKey)) {
+        console.warn('Supabase Anon Key must be a valid JWT or start with sb_. Prefix:', supabaseAnonKey.substring(0, 10));
     }
+    console.groupEnd();
   }
   
   return configured;
