@@ -1,0 +1,16 @@
+{
+  "name": "Yazal ERP - Sales & Operations",
+  "short_name": "Yazal ERP",
+  "description": "Unified Yazal ERP Travel Portal System for staff and agents.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0E1B2E",
+  "theme_color": "#F3E4C8",
+  "icons": [
+    {
+      "src": "/src/assets/images/yazal_app_icon_1784335862778.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}

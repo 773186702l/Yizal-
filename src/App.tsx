@@ -37,7 +37,7 @@ import {
 
 // Persistent Cloud Layer imports
 import { 
-    initFirebaseAuth,
+    initSupabaseAuth,
     loadUsers,
     saveUserToDb,
     loadCustomers,
@@ -135,12 +135,12 @@ export default function App() {
       searchTerm: ''
   });
 
-  // Async load database from real cloud Firestore
+  // Async load database from real cloud Supabase
   useEffect(() => {
       async function initializeCloud() {
           try {
               // 1. Auth check
-              await initFirebaseAuth();
+              await initSupabaseAuth();
 
               // 2. Parallel loading with seed fallback
               const [
@@ -227,7 +227,7 @@ export default function App() {
       });
   };
 
-  // Intercepting State modifications and pushing them to actual Firestore
+  // Intercepting State modifications and pushing them to actual Supabase
   const handleUpdateState = (newState: Partial<AppState>) => {
       setState(prev => {
           const merged = { ...prev, ...newState };
@@ -442,7 +442,7 @@ export default function App() {
                           onToggleSidebar={() => setSidebarOpen(open => !open)}
                           onSearch={handleSearch}
                       />
-                      <div className="content" id="content">
+                      <div className="content" id="content" style={{ padding: '32px 24px 60px 24px' }}>
                           {renderContent()}
                       </div>
                   </div>

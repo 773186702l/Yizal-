@@ -2,15 +2,26 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
-import admin from "firebase-admin";
+import { createClient } from "@supabase/supabase-js";
 
-// Initialize Firebase Admin
-if (!admin.apps.length) {
-  admin.initializeApp();
+// Initialize Supabase Admin (using service role key)
+let _supabase: any = null;
+function getSupabase() {
+  if (!_supabase) {
+    const supabaseUrl = process.env.SUPABASE_URL || '';
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Supabase configuration missing: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.');
+    }
+    _supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+  }
+  return _supabase;
 }
-
-const db = admin.firestore();
-const auth = admin.auth();
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -35,31 +46,34 @@ async function startServer() {
   app.post("/api/admin/create-user", async (req, res) => {
     const { fullname, username, password, role } = req.body;
     
-    // In a real app, we would verify the requester is an admin using a token
-    // For this prototype, we'll proceed but ideally we'd check headers: req.headers.authorization
-
     try {
-      // 1. Create Auth User
-      // We use a dummy email based on username
+      // 1. Create Auth User in Supabase
       const email = `${username}@yazal-erp.com`;
-      const userRecord = await auth.createUser({
+      const { data: authData, error: authError } = await getSupabase().auth.admin.createUser({
         email,
         password,
-        displayName: fullname,
+        email_confirm: true,
+        user_metadata: { full_name: fullname }
       });
 
-      // 2. Create Firestore Profile
-      await db.collection('users').doc(username).set({
-        uid: userRecord.uid,
-        name: fullname,
-        username: username,
-        password: password, // Note: In production, never store passwords in plaintext!
-        role: role,
-        email: email,
-        createdAt: new Date().toISOString()
-      });
+      if (authError) throw authError;
 
-      res.json({ success: true, uid: userRecord.uid });
+      // 2. Create Profile in 'users' table
+      const { error: dbError } = await getSupabase()
+        .from('users')
+        .insert([{
+          uid: authData.user.id,
+          name: fullname,
+          username: username,
+          password: password, // Note: Still in plaintext as per original logic, but Supabase Auth handles real login
+          role: role,
+          email: email,
+          created_at: new Date().toISOString()
+        }]);
+
+      if (dbError) throw dbError;
+
+      res.json({ success: true, uid: authData.user.id });
     } catch (error: any) {
       console.error('Error creating user:', error);
       res.status(500).json({ error: error.message || "Failed to create user" });
@@ -73,11 +87,17 @@ async function startServer() {
     try {
       // 1. Delete from Auth if UID is provided
       if (uid) {
-        await auth.deleteUser(uid);
+        const { error: authError } = await getSupabase().auth.admin.deleteUser(uid);
+        if (authError) throw authError;
       }
 
-      // 2. Delete from Firestore
-      await db.collection('users').doc(username).delete();
+      // 2. Delete from users table
+      const { error: dbError } = await getSupabase()
+        .from('users')
+        .delete()
+        .eq('username', username);
+
+      if (dbError) throw dbError;
 
       res.json({ success: true });
     } catch (error: any) {

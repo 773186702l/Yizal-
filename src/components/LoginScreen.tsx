@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { T, accounts } from '../data';
 import { AppState, User } from '../types';
 import { Shield, User as UserIcon, Lock, Eye, EyeOff, Globe, Sparkles } from 'lucide-react';
-import { auth } from '../lib/firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { supabase } from '../lib/supabase';
 
 interface LoginScreenProps {
     onLogin: (user: User) => void;
@@ -17,7 +16,6 @@ export default function LoginScreen({ onLogin, state, onToggleLang }: LoginScree
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [showDirectory, setShowDirectory] = useState(false);
 
     const isRtl = state.lang === 'ar';
     const t = (k: string) => T[state.lang][k] || k;
@@ -30,15 +28,18 @@ export default function LoginScreen({ onLogin, state, onToggleLang }: LoginScree
         const email = `${usernameInput.trim().toLowerCase()}@yazal-erp.com`;
 
         try {
-            // 1. Authenticate with Firebase
-            const userCredential = await signInWithEmailAndPassword(auth, email, passwordInput);
-            const firebaseUser = userCredential.user;
+            // 1. Authenticate with Supabase
+            const { data, error: authError } = await supabase.auth.signInWithPassword({
+                email,
+                password: passwordInput,
+            });
 
-            // 2. Find matching user profile in state (which is synced with Firestore)
+            if (authError) throw authError;
+
+            // 2. Find matching user profile in state
             const matchedUser = state.usersList.find(u => u.username.trim().toLowerCase() === usernameInput.trim().toLowerCase());
 
             if (!matchedUser) {
-                // If not found in usersList, check hardcoded accounts (for initial setup)
                 const fallbackUser = accounts.find(u => u.username.trim().toLowerCase() === usernameInput.trim().toLowerCase());
                 if (fallbackUser) {
                     onLogin(fallbackUser);
@@ -54,12 +55,6 @@ export default function LoginScreen({ onLogin, state, onToggleLang }: LoginScree
         } finally {
             setLoading(false);
         }
-    };
-
-    const handleFillFromDirectory = (usr: User) => {
-        setUsernameInput(usr.username);
-        setPasswordInput(usr.password);
-        setError(false);
     };
 
     return (
@@ -275,96 +270,6 @@ export default function LoginScreen({ onLogin, state, onToggleLang }: LoginScree
                         )}
                     </button>
                 </form>
-
-                {/* Secure Collapsible Auditor Guide */}
-                <div style={{
-                    borderTop: '1px solid var(--border)',
-                    paddingTop: '16px',
-                    marginTop: '4px'
-                }}>
-                    <button 
-                        onClick={() => setShowDirectory(!showDirectory)}
-                        style={{
-                            width: '100%',
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--gold-600)',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '6px'
-                        }}
-                    >
-                        <Sparkles size={13} />
-                        <span>
-                            {isRtl 
-                                ? (showDirectory ? '✕ إخفاء دليل الحسابات النشطة' : '👁️ استعراض دليل الحسابات النشطة والصلاحيات')
-                                : (showDirectory ? '✕ Hide Active Staff Directory' : '👁️ View Active Staff Directory & Roles')}
-                        </span>
-                    </button>
-
-                    {showDirectory && (
-                        <div style={{
-                            background: 'var(--surface-2)',
-                            borderRadius: '12px',
-                            padding: '12px',
-                            marginTop: '12px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '8px',
-                            maxHeight: '180px',
-                            overflowY: 'auto',
-                            border: '1px solid var(--border)'
-                        }}>
-                            <p style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.4', marginBottom: '4px' }}>
-                                {isRtl 
-                                    ? 'هنا يمكنك مطابقة الحسابات الحقيقية المضافة حالياً. اضغط على أي موظف لتعبئة بياناته تلقائياً لتجربة تسجيل دخوله مباشرة:'
-                                    : 'Here are the live accounts registered on the system. Click on any employee to populate their credentials:'}
-                            </p>
-                            {state.usersList.map(usr => (
-                                <div 
-                                    key={usr.username} 
-                                    onClick={() => handleFillFromDirectory(usr)}
-                                    style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        padding: '8px 10px',
-                                        background: 'var(--surface)',
-                                        border: '1px solid var(--border)',
-                                        borderRadius: '8px',
-                                        cursor: 'pointer',
-                                        fontSize: '11.5px',
-                                        transition: 'all 0.2s'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.borderColor = 'var(--gold-500)';
-                                        e.currentTarget.style.background = 'var(--surface-2)';
-                                        e.currentTarget.style.transform = 'translateY(-1px)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.borderColor = 'var(--border)';
-                                        e.currentTarget.style.background = 'var(--surface)';
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                    }}
-                                >
-                                    <div>
-                                        <div style={{ fontWeight: 600, color: 'var(--text)' }}>{usr.name}</div>
-                                        <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                                            {usr.username} ({usr.password})
-                                        </div>
-                                    </div>
-                                    <span className={`stamp ${usr.role === 'admin' ? 'danger' : usr.role === 'accountant' ? 'info' : usr.role === 'sales' ? 'warn' : 'success'}`} style={{ fontSize: '9px', padding: '2px 6px', transform: 'none' }}>
-                                        {usr.role.toUpperCase()}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
             </div>
 
             {/* Footer Credits */}

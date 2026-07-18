@@ -112,7 +112,7 @@ export default function DashboardView({ state, onNavigate }: DashboardViewProps)
 
     return (
         <div className="view relative min-h-screen">
-            <div className="page-head" style={{ marginBottom: '40px' }}>
+            <div className="page-head" style={{ marginBottom: '52px' }}>
                 <div>
                     <h1 className="page-title">{t('dash_title')}</h1>
                     <p className="page-desc">{t('dash_sub')}</p>
@@ -120,7 +120,7 @@ export default function DashboardView({ state, onNavigate }: DashboardViewProps)
             </div>
 
             {/* Quick KPI Cards Grid */}
-            <div className="kpi-grid grid" style={{ display: 'grid', gap: '20px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: '40px' }}>
+            <div className="kpi-grid grid" style={{ display: 'grid', gap: '24px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: '52px' }}>
                 <div className="card kpi" style={{ borderInlineStart: '4px solid var(--gold-600)', padding: '20px' }}>
                     <div className="lbl" style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>{t('kpi_customers')}</div>
                     <div className="val" style={{ fontSize: '28px', fontWeight: 700, marginTop: '8px', fontFamily: 'var(--font-disp)' }}>{totalCustomers}</div>
@@ -145,7 +145,7 @@ export default function DashboardView({ state, onNavigate }: DashboardViewProps)
             </div>
 
             {/* Quick Actions Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-24">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-32">
                 {quickActions.map(action => (
                     <button 
                         key={action.view}
@@ -159,11 +159,11 @@ export default function DashboardView({ state, onNavigate }: DashboardViewProps)
             </div>
 
             {/* Main Interactive Presentation Layout */}
-            <div className="two-col grid grid-cols-1 lg:grid-cols-2 gap-16 mb-24">
+            <div className="two-col grid grid-cols-1 lg:grid-cols-2 gap-16 mb-32">
                 <InsightsWidget tasks={state.tasks} requests={state.serviceRequests} />
             </div>
 
-            <div className="two-col grid grid-cols-1 lg:grid-cols-2 gap-16 mb-24">
+            <div className="two-col grid grid-cols-1 lg:grid-cols-2 gap-16 mb-32">
                 
                 {/* Activity Feed Card */}
                 <div className="card feed transition-all duration-300 hover:shadow-lg hover:border-gold-200" style={{ padding: '24px', borderRadius: '16px' }}>

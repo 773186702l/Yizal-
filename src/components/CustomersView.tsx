@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { AppState, Customer } from '../types';
 import { T } from '../data';
+import { sendWhatsAppMessage } from '../lib/whatsapp';
+import { MessageSquare } from 'lucide-react';
 
 interface CustomersViewProps {
     state: AppState & { customers: Customer[] };
@@ -138,7 +140,20 @@ export default function CustomersView({ state, onUpdateCustomers }: CustomersVie
                                         <div style={{ fontWeight: 600 }}>{customer.name}</div>
                                     </td>
                                     <td style={{ direction: 'ltr', textAlign: isRtl ? 'right' : 'left' }}>
-                                        {customer.phone}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            {customer.phone}
+                                            <button 
+                                                className="btn-icon" 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    sendWhatsAppMessage(customer.phone, isRtl ? 'مرحباً، أرسل لك رسالة من يزل.' : 'Hello, sending you a message from Yazal.');
+                                                }}
+                                                style={{ padding: '4px', backgroundColor: '#25D366', color: '#fff', border: 'none', borderRadius: '4px' }}
+                                                title={isRtl ? 'إرسال واتساب' : 'Send WhatsApp'}
+                                            >
+                                                <MessageSquare size={14} />
+                                            </button>
+                                        </div>
                                     </td>
                                     <td>{customer.nat}</td>
                                     <td>
@@ -179,7 +194,17 @@ export default function CustomersView({ state, onUpdateCustomers }: CustomersVie
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '20px' }}>
                             <div className="field-row">
                                 <span className="k">{t('th_phone')}</span>
-                                <span className="v" style={{ direction: 'ltr' }}>{selectedCustomer.phone}</span>
+                                <div className="v" style={{ direction: 'ltr', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    {selectedCustomer.phone}
+                                    <button 
+                                        className="btn" 
+                                        onClick={() => sendWhatsAppMessage(selectedCustomer.phone, isRtl ? 'مرحباً، أرسل لك رسالة من يزل.' : 'Hello, sending you a message from Yazal.')}
+                                        style={{ padding: '4px 8px', fontSize: '11px', backgroundColor: '#25D366', color: '#fff', border: 'none' }}
+                                    >
+                                        <MessageSquare size={12} style={{ marginRight: isRtl ? 0 : '4px', marginLeft: isRtl ? '4px' : 0 }} />
+                                        {isRtl ? 'واتساب' : 'WhatsApp'}
+                                    </button>
+                                </div>
                             </div>
                             <div className="field-row">
                                 <span className="k">{t('th_nat')}</span>

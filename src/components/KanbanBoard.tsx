@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Task, AppState } from '../types';
+import { MessageSquare, User as UserIcon } from 'lucide-react';
+import { sendWhatsAppMessage, formatTaskMessage } from '../lib/whatsapp';
 
 interface KanbanBoardProps {
     state: AppState;
@@ -12,6 +14,9 @@ interface KanbanBoardProps {
 export default function KanbanBoard({ state, tasks, onUpdateTask, selectedTaskIds, onToggleSelect }: KanbanBoardProps) {
     const isRtl = state.lang === 'ar';
     const tagMap = new Map((state.customTags || []).map(t => [t.name, t.color]));
+    
+    // State for task-specific customer selection
+    const [sharingTask, setSharingTask] = useState<string | null>(null);
 
     const handleDragStart = (e: React.DragEvent, task: Task) => {
         e.dataTransfer.setData('taskId', task.id);
@@ -196,12 +201,75 @@ export default function KanbanBoard({ state, tasks, onUpdateTask, selectedTaskId
                                 <span className={`stamp ${task.priority === 'high' ? 'danger' : task.priority === 'medium' ? 'warn' : 'success'}`} style={{ fontSize: '10px', padding: '2px 8px' }}>
                                     {task.priority === 'high' ? (isRtl ? 'مرتفع' : 'High') : task.priority === 'medium' ? (isRtl ? 'متوسط' : 'Medium') : (isRtl ? 'منخفض' : 'Low')}
                                 </span>
-                                {task.dueDate && (
-                                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                                        📅 {task.dueDate}
-                                    </span>
-                                )}
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <button 
+                                        className="btn-icon" 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSharingTask(sharingTask === task.id ? null : task.id);
+                                        }}
+                                        style={{ padding: '4px', backgroundColor: '#25D366', color: '#fff', border: 'none', borderRadius: '4px' }}
+                                        title={isRtl ? 'مشاركة عبر واتساب' : 'Share via WhatsApp'}
+                                    >
+                                        <MessageSquare size={12} />
+                                    </button>
+                                    {task.dueDate && (
+                                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                            📅 {task.dueDate}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
+
+                            {/* Inline Customer Picker for WhatsApp Sharing */}
+                            {sharingTask === task.id && (
+                                <div style={{ 
+                                    marginTop: '8px', 
+                                    padding: '8px', 
+                                    backgroundColor: 'var(--surface-2)', 
+                                    borderRadius: '8px',
+                                    border: '1px solid var(--gold-600)',
+                                    zIndex: 10
+                                }}>
+                                    <div style={{ fontSize: '10px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-muted)' }}>
+                                        {isRtl ? 'اختر العميل للإرسال:' : 'Select Customer to Send:'}
+                                    </div>
+                                    <div style={{ maxHeight: '120px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        {state.customers.map(customer => (
+                                            <button 
+                                                key={customer.code}
+                                                className="btn"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const msg = formatTaskMessage(task, state.lang);
+                                                    sendWhatsAppMessage(customer.phone, msg);
+                                                    setSharingTask(null);
+                                                }}
+                                                style={{ 
+                                                    padding: '4px 8px', 
+                                                    fontSize: '11px', 
+                                                    justifyContent: 'flex-start',
+                                                    textAlign: isRtl ? 'right' : 'left',
+                                                    width: '100%'
+                                                }}
+                                            >
+                                                <UserIcon size={12} style={{ marginRight: isRtl ? 0 : '6px', marginLeft: isRtl ? '6px' : 0 }} />
+                                                {customer.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <button 
+                                        className="btn" 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSharingTask(null);
+                                        }}
+                                        style={{ marginTop: '6px', width: '100%', justifyContent: 'center', fontSize: '10px', padding: '2px' }}
+                                    >
+                                        {isRtl ? 'إلغاء' : 'Cancel'}
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>

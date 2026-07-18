@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { AppState, Invoice } from '../types';
+import { AppState, Invoice, Customer } from '../types';
 import { T } from '../data';
+import { sendWhatsAppMessage, formatInvoiceMessage } from '../lib/whatsapp';
 
 interface InvoicesViewProps {
-    state: AppState & { invoices: Invoice[] };
+    state: AppState & { invoices: Invoice[]; customers: Customer[] };
     onUpdateInvoices: (invoices: Invoice[]) => void;
 }
 
@@ -23,13 +24,18 @@ export default function InvoicesView({ state, onUpdateInvoices }: InvoicesViewPr
     );
 
     const handleWhatsAppSend = (inv: Invoice) => {
-        const text = isRtl 
-            ? `مرحباً ${inv.customer}،\nمرفق لكم الفاتورة الرقمية رقم ${inv.no} الصادرة من تطبيق يزل للخدمات.\nالمبلغ المطلوب: ${inv.amount} ${inv.currency}\nحالة الفاتورة: ${t('st_' + inv.status)}\nللدفع الإلكتروني أو الاستعلام: https://yazal-app.com/invoice/${inv.no}\nشكراً لتعاملكم معنا.`
-            : `Hello ${inv.customer},\nHere is your digital invoice ${inv.no} from Yazal App.\nAmount due: ${inv.amount} ${inv.currency}\nInvoice status: ${t('st_' + inv.status)}\nPay online or inspect: https://yazal-app.com/invoice/${inv.no}\nThank you for choosing Yazal App.`;
+        const customer = state.customers.find(c => c.name.trim() === inv.customer.trim());
+        const message = formatInvoiceMessage(inv, state.lang);
 
-        // Copy template to clipboard
-        navigator.clipboard.writeText(text);
-        alert(isRtl ? 'تم نسخ قالب رسالة واتساب الجاهزة إلى الحافظة للإرسال السريع!' : 'WhatsApp template message copied to clipboard!');
+        if (customer && customer.phone) {
+            sendWhatsAppMessage(customer.phone, message);
+        } else {
+            // Fallback to clipboard if no phone found
+            navigator.clipboard.writeText(message);
+            alert(isRtl 
+                ? 'لم يتم العثور على رقم هاتف للعميل. تم نسخ نص الرسالة للحافظة.' 
+                : 'No phone number found for this customer. Message copied to clipboard.');
+        }
     };
 
     const handlePrint = () => {
